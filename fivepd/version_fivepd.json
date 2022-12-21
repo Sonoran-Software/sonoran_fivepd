@@ -1,5 +1,5 @@
 {
-    "version": "1.0",
+    "version": "1.1",
     "check_url": "https://raw.githubusercontent.com/xBlazeTECH/sonoran_fivepd/master/fivepd/version_fivepd.json",
     "download_url": "https://github.com/xBlazeTECH/sonoran_fivepd/"
 }
