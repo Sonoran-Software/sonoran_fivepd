@@ -30,7 +30,7 @@ CreateThread(function()
                     ['code'] = pluginConfig.code, -- TODO
                     ['description'] = callDesc,
                     ['units'] = units,
-                    ['notes'] = {} -- required
+                    ['notes'] = {} -- required but empty
                 }
 
                 debugLog("Sending New Callout")
