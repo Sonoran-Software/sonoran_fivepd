@@ -17,7 +17,6 @@ CreateThread(function()
                 local units = {identifier}
                 local notes = ""
                 local postal = ""
-                local notesStr = ""
 
                 local data = {
                     ['serverId'] = Config.serverId,
@@ -31,7 +30,7 @@ CreateThread(function()
                     ['code'] = pluginConfig.code, -- TODO
                     ['description'] = callDesc,
                     ['units'] = units,
-                    ['notes'] = {notesStr} -- required
+                    ['notes'] = {} -- required
                 }
 
                 debugLog("Sending New Callout")
