@@ -12,11 +12,14 @@ CreateThread(function()
             registerApiType("NEW_DISPATCH", "emergency")
 
             -- New Callout Handler
-            function CreateNewCallout(src, callName, callDesc, callResponse, callLocation)
+            function CreateNewCallout(src, callName, callDesc, callResponse, callLocation, callCoord)
                 local identifier = GetIdentifiers(src)[Config.primaryIdentifier]
                 local units = {identifier}
                 local notes = ""
                 local postal = ""
+                if pluginConfig.nearestpostal then
+                    postal = exports['nearest-postal']:getPostalServer(callCoord)["code"] or ""
+                end
 
                 local data = {
                     ['serverId'] = Config.serverId,
@@ -24,7 +27,7 @@ CreateThread(function()
                     ['status'] = pluginConfig.status,
                     ['priority'] = callResponse,
                     ['block'] = "", -- not used, but required
-                    ['postal'] = postal, -- TODO
+                    ['postal'] = postal, 
                     ['address'] = callLocation ~= nil and callLocation or 'Unknown',
                     ['title'] = callName,
                     ['code'] = pluginConfig.code, -- TODO
@@ -40,8 +43,8 @@ CreateThread(function()
             RegisterServerEvent("SonoranCAD::fivepd:CalloutReceived", function(src, callIdent, callId, callName, callDesc, callResponse, callLocX, callLocY, callLocZ)
                 -- This Event doesn't seem to trigger so I didn't use it.
             end)
-            RegisterServerEvent("SonoranCAD::fivepd:CalloutAccepted", function(src, callIdent, callId, callName, callDesc, callResponse, callLocation)
-                CreateNewCallout(src, callName, callDesc, callResponse, callLocation)
+            RegisterServerEvent("SonoranCAD::fivepd:CalloutAccepted", function(src, callIdent, callId, callName, callDesc, callResponse, callLocation, callCoord)
+                CreateNewCallout(src, callName, callDesc, callResponse, callLocation, callCoord)
             end)
             RegisterServerEvent("SonoranCAD::fivepd:CalloutCompleted", function(src, callIdent, callId, callName, callDesc, callResponse, callLocX, callLocY, callLocZ)
                 print(src .. " completed callout: " .. json.encode(callout))
