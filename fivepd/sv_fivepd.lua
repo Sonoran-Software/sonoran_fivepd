@@ -8,7 +8,7 @@
 CreateThread(function()
     Config.LoadPlugin("fivepd", function(pluginConfig)
         if pluginConfig.enabled then
-
+            local postalsConfig = Config.GetPluginConfig('postals')
             registerApiType("NEW_DISPATCH", "emergency")
 
             -- New Callout Handler
@@ -17,8 +17,8 @@ CreateThread(function()
                 local units = {identifier}
                 local notes = ""
                 local postal = ""
-                if pluginConfig.nearestpostal then
-                    postal = exports['nearest-postal']:getPostalServer(callCoord)["code"] or ""
+                if postalsConfig then
+                    postal = getPostalFromVector3(callCoord) or ""
                 end
 
                 local data = {
@@ -27,7 +27,7 @@ CreateThread(function()
                     ['status'] = pluginConfig.status,
                     ['priority'] = callResponse,
                     ['block'] = "", -- not used, but required
-                    ['postal'] = postal, 
+                    ['postal'] = postal,
                     ['address'] = callLocation ~= nil and callLocation or 'Unknown',
                     ['title'] = callName,
                     ['code'] = pluginConfig.code, -- TODO
