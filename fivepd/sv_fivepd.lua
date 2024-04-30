@@ -17,7 +17,7 @@ CreateThread(function()
                 local units = {identifier}
                 local notes = ""
                 local postal = ""
-                if postalsConfig then
+                if postalsConfig and postalsConfig.enabled then
                     postal = getPostalFromVector3(callCoord) or ""
                 end
 
