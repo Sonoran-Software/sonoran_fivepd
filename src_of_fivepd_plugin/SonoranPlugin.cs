@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using CitizenFX.Core;
@@ -52,12 +52,12 @@ namespace SonoranPlugin
             DebugLog("callName" + callName);
             string callDesc = callout.CalloutDescription;
             DebugLog("callDesc!" + callDesc);
-            Vector3 callLoc = callout.Location;
-            DebugLog("callLoc" + callLoc.ToString());
+            Vector3 callCoord = callout.Location;
+            DebugLog("callLoc" + callCoord.ToString());
             uint var1 = 0;
             uint var2 = 0;
 
-            API.GetStreetNameAtCoord(callLoc.X, callLoc.Y, callLoc.Z, ref var1, ref var2);
+            API.GetStreetNameAtCoord(callCoord.X, callCoord.Y, callCoord.Z, ref var1, ref var2);
 
             var l1 = API.GetStreetNameFromHashKey(var1);
             var l2 = API.GetStreetNameFromHashKey(var2);
@@ -67,7 +67,7 @@ namespace SonoranPlugin
             int callResponse = callout.ResponseCode;
             DebugLog("callResponse" + callResponse);
             DebugLog("Sending Callout to CAD");
-            TriggerServerEvent("SonoranCAD::fivepd:CalloutAccepted", Game.Player.Character.NetworkId, callIdent, callId, callName, callDesc, callResponse, callLocation);
+            TriggerServerEvent("SonoranCAD::fivepd:CalloutAccepted", Game.Player.Character.NetworkId, callIdent, callId, callName, callDesc, callResponse, callLocation, callCoord);
         }
         public async Task OnCalloutCompleted(Callout callout)
         {
