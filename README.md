@@ -14,21 +14,18 @@ The bridge is built against the published FivePD API and checked against Sonoran
 
 1. Download **sonoran_fivepd.zip** from the [latest release](https://github.com/Sonoran-Software/sonoran_fivepd/releases/latest).
 2. Copy the included `sonoran_fivepd` folder into your server's resources. Keep that folder name exactly as shown.
-3. Copy `put_in_fivepd_plugins/SonoranPlugin.net.dll` into `fivepd/plugins/`, replacing the old DLL if present. Keep FivePD's own API DLLs in place.
+3. Copy `put_in_fivepd_plugins/SonoranPlugin.net.dll` into `fivepd/plugins/`. Keep FivePD's own API DLLs in place.
 4. Review `sonoran_fivepd/config.lua`. Civilian, vehicle, license, and warrant imports are enabled with CAD's default record mapping IDs. For customized templates, follow [Record Mappings](#record-mappings).
 5. Add the resource after FivePD and Sonoran CAD in `server.cfg`:
 
    ```cfg
-   ensure sonorancad
+   # Start CAD through its configuration, not a direct resource ensure.
+   exec sonorancad.cfg
    ensure fivepd
    ensure sonoran_fivepd
    ```
 
 6. Restart the server and reconnect. Link your CAD account, go on duty in CAD and FivePD, and accept a callout or make a traffic stop.
-
-**Upgrading from the old plugin:** remove the old `fivepd` folder from `sonorancad/submodules/` and its FivePD configuration from `sonorancad/configuration/`. Replace the old `SonoranPlugin.net.dll`; do not keep a renamed second copy. This version runs as its own resource and does not go inside `sonorancad`.
-
-**Upgrading from 2.0:** back up your configuration, replace both the resource and DLL, and merge your custom settings into the new `config.lua` to use the new default mappings.
 
 ## Features
 
@@ -48,7 +45,7 @@ The bridge is built against the published FivePD API and checked against Sonoran
 - Every NPC import also imports available driver, hunting, and weapon licenses and any warrant text. Each record category can be disabled. Fishing licenses require a custom CAD dropdown option and configuration.
 - Default mappings use CAD's dropdown values: sex `M`/`F`, uppercase license statuses, and `SUSPENDED` for FivePD's `Revoked` status. Vehicle and license DMV approval is set to approved; the separate status field retains the registration/license validity. Vehicle flags of `Stolen` map to `STOLEN`.
 - Imported records and dispatch calls are automatically deleted by CAD after **60 minutes** by default. Set `deleteAfterMinutes` to a whole number from 1 to 1440.
-- Repeated imports are skipped until their expiration, including across resource/server restarts. Re-encountered NPCs and vehicles can be imported again after expiration. Imports are snapshots; existing records are not continuously updated.
+- Duplicate suppression is shared by all officers on the server, not per officer or per callout. Four officers encountering the same NPC/vehicle create one of each applicable record, not four copies. NPCs are matched by name, date of birth, and address; vehicles by normalized plate. Each license type and warrant is tracked separately. Successful imports are remembered until expiry, including across resource/server restarts. After expiry, an active encounter can import them again. Imports are snapshots; existing records are not continuously updated.
 - Callout response codes map to CAD priorities: Code 1 -> priority 3, Code 2 -> priority 2, Code 3/99 -> priority 1. Unrecognized codes use priority 2. Both the mapping and call codes are configurable.
 - An optional postal resource can provide postals. No new API key or changes to the Sonoran CAD resource are needed.
 
@@ -82,6 +79,7 @@ To restrict access further, set `acePermission = 'sonoran_fivepd.use'` and grant
 ## Behavior and Troubleshooting
 
 - Only NPCs and vehicles encountered through the triggers above are imported. This does not import FivePD's entire database, scan every nearby entity, or sync CAD edits back into FivePD.
+- NPC portraits are not imported.
 - Automatic callout imports begin after acceptance, once the entities exist and are networked on the officer's client. The plugin checks callout fields, auto-properties, arrays, lists, and dictionaries. Computed properties, static fields, and entities hidden inside other helper objects are not inspected. Use the fallback commands for those callouts, or disable callout discovery with `automaticCalloutRecords = false`.
 - Callout discovery is bounded to 64 entities and four fetch attempts per pass, with a two-second polling delay and a one-minute cooldown after sending an entity. Shared server-side duplicate suppression prevents officers from creating repeated records. Nothing is imported just because a callout was offered or generated.
 - Completion adds a note; it does not close the call, detach officers, change duty status, or create arrest reports. Service notes do not dispatch CAD units. Unaccepted callouts do not create 911 calls.
@@ -93,3 +91,7 @@ To restrict access further, set `acePermission = 'sonoran_fivepd.use'` and grant
 ## Source
 
 [FivePD API source](https://github.com/KDani-99/FivePD-API) and the [official FivePD.net 1.3.0 package](https://www.nuget.org/packages/FivePD.net/1.3.0) provide the bridge's API contracts. The old FivePD documentation website is unavailable. [Build and verification notes](DEVELOPMENT.md) are included for anyone maintaining their own fork.
+
+## License
+
+[PolyForm Noncommercial License 1.0.0](LICENSE), matching SonoranCADFiveM.

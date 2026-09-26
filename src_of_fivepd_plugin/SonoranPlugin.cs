@@ -39,7 +39,7 @@ namespace SonoranPlugin
                 RunCommand(false)), false);
             API.RegisterCommand("fivepdcadvehicle", new Action<int, List<object>, string>((_, args, raw) =>
                 RunCommand(true)), false);
-            Debug.WriteLine("[sonoran_fivepd] Bridge 2.1.0 loaded (unofficial, unsupported).");
+            Debug.WriteLine("[sonoran_fivepd] Bridge 2.1.1 loaded (unofficial, unsupported).");
         }
 
         private static bool Ready()

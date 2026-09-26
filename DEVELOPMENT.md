@@ -36,4 +36,8 @@ No live FiveM/FivePD session was available during development. The release there
 
 Successful imports are snapshots and are deduplicated until expiration. KVP state is scoped by CAD community and server. Deleting that KVP state, running duplicate installations, or an HTTP response lost after CAD commits a write can produce duplicates. FivePD's client API supplies the NPC data; linked on-duty players are trusted to report it. Optional ACE restrictions narrow who can submit it.
 
+The four-officer regression test submits matching NPC and vehicle data while the first record write is still in flight. It checks that only one civilian, three supported licenses, one warrant, and one vehicle are created, then repeats all four officers' submissions after a resource restart. A single worker serializes writes; successful-record keys are shared across officers and callouts until expiration, rather than being scoped to an individual officer.
+
+NPC portrait feasibility was checked against the bundled `core/headshots.lua` and `civreg/cl_civreg.lua`. The `getBase64` export accepts an arbitrary ped handle, but each capture clears existing headshot handles, so concurrent captures can invalidate each other. Civreg captures the local player and only its database-sync path has a local capture guard. Automatic NPC capture is not enabled without shared capture isolation and live streaming/despawn testing.
+
 The original integration was sponsored by LakeSide RP.

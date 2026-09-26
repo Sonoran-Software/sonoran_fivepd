@@ -1,11 +1,9 @@
 Unofficial, unsupported, and not maintained. Provided as-is for legacy FivePD communities.
 
-- Automatically imports NPCs and vehicles retained by accepted callouts, including later spawns. Nearby commands remain optional fallbacks for custom callouts that cannot be inspected.
-- Civilian, vehicle, license, and warrant imports enabled with verified default CAD mapping IDs and matching dropdown values.
-- Supports both original and saved default license UIDs. Fishing licenses remain opt-in because the default CAD template has no fishing option.
-- README includes illustrated field-ID instructions and clear automatic-import limits.
-- All CAD writes still use the bundled Sonoran.lua v2 client, paced with persistent duplicate suppression and 60-minute CAD-managed deletion by default.
-
-**Upgrade:** back up your configuration, replace both the resource and `SonoranPlugin.net.dll`, and merge custom settings into the new `config.lua`. Restart the server and reconnect. No Sonoran CAD resource changes are needed.
+- Includes the same PolyForm Noncommercial License 1.0.0 as SonoranCADFiveM, in both the repository and release ZIP.
+- Corrects installation to use `exec sonorancad.cfg` and removes legacy upgrade instructions.
+- Verifies four officers submitting the same callout entities concurrently create only one of each applicable record, including after a resource restart. Deduplication lasts until record expiry and is shared across callouts.
+- NPC portraits remain excluded; the shared headshot capture path has not been verified for concurrent automatic NPC captures.
+- Automatic callout imports, default CAD mappings, and v2-only writes through the bundled Sonoran.lua client remain unchanged.
 
 Build, collector tests, and bridge tests through the real bundled CAD v2 SDK pass. Live FivePD gameplay has not been verified. See the README for installation and limitations.

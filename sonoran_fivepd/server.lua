@@ -280,7 +280,7 @@ AddEventHandler('playerDropped', function()
 end)
 
 CreateThread(function()
-    log('2.1.0 started. Unofficial, unsupported and not maintained. CAD v2 only.')
+    log('2.1.1 started. Unofficial, unsupported and not maintained. CAD v2 only.')
     while true do
         local job = table.remove(queue, 1)
         if job then

@@ -1,8 +1,8 @@
 local handlers, worker, requests, kvp = {}, nil, {}, {}
 local now, milliseconds, serial = 100000, 0, 100
-local players = { [11] = 'officer-one', [12] = 'officer-two', [13] = 'unlinked' }
-local linked = { [11] = 'cad-one', [12] = 'cad-two' }
-local units = { [11] = {}, [12] = {} }
+local players = { [11] = 'officer-one', [12] = 'officer-two', [13] = 'unlinked', [14] = 'officer-three', [15] = 'officer-four' }
+local linked = { [11] = 'cad-one', [12] = 'cad-two', [14] = 'cad-three', [15] = 'cad-four' }
+local units = { [11] = {}, [12] = {}, [14] = {}, [15] = {} }
 local failNext, missingId, onRequest = false, false, nil
 local function copy(value) return json.decode(json.encode(value)) end
 
@@ -308,6 +308,48 @@ Config.records.license.types.Fishing = 'FISHING'
 event(11, 'ped', ped)
 drain()
 same(last('createRecordV2').args[1].replaceValues['7eddab3-1daf-4a01-82'], 'FISHING', 'Custom fishing option can be enabled')
+
+now = now + 60
+Config.records.license.types.Fishing = nil
+call.identifier = 'four-officer-callout'
+local callsBefore, recordsBefore = count('createDispatchCallV2'), count('createRecordV2')
+for _, officer in ipairs({11, 12, 14, 15}) do event(officer, 'callout', 'accepted', call) end
+drain()
+same(count('createDispatchCallV2') - callsBefore, 1, 'Four officers share one callout')
+local recordStart = #requests
+ped.FirstName, ped.NetworkID = 'FourOfficers', 132
+vehicle.LicensePlate, vehicle.NetworkID = 'FOUR123', 133
+-- The other three officers report the same entities before the first write returns.
+onRequest = function()
+    for _, officer in ipairs({12, 14, 15}) do
+        event(officer, 'ped', ped)
+        event(officer, 'vehicle', vehicle)
+    end
+end
+event(11, 'ped', ped)
+event(11, 'vehicle', vehicle)
+drain()
+same(count('createRecordV2') - recordsBefore, 6, 'Four overlapping officers create one civilian, three licenses, one warrant and one vehicle')
+local expectedRecords = { ['7'] = 0, ['4:DRIVER'] = 0, ['4:HUNTING'] = 0, ['4:WEAPON'] = 0, ['2'] = 0, ['5'] = 0 }
+for i = recordStart + 1, #requests do
+    same(requests[i].method, 'createRecordV2', 'Encounter only creates records')
+    local record = requests[i].args[1]
+    local recordKey = tostring(record.recordTypeId)
+    if record.recordTypeId == 4 then recordKey = recordKey .. ':' .. record.replaceValues['7eddab3-1daf-4a01-82'] end
+    assert(expectedRecords[recordKey] ~= nil, 'Unexpected record category in four-officer import')
+    expectedRecords[recordKey] = expectedRecords[recordKey] + 1
+end
+for kind, total in pairs(expectedRecords) do same(total, 1, 'Four-officer record category ' .. kind) end
+
+boot()
+Config.records.license.enabled, Config.records.warrant.enabled = true, true
+for _, officer in ipairs({11, 12, 14, 15}) do
+    event(officer, 'ped', ped)
+    event(officer, 'vehicle', vehicle)
+end
+drain()
+same(count('createRecordV2') - recordsBefore, 6, 'Four-officer deduplication persists across resource restart')
+print('PASS: four-officer overlapping record imports and persistent duplicate suppression')
 if cad_root then
     assert(#httpRequests > 0, 'SDK requests were exercised')
     for _, request in ipairs(httpRequests) do
