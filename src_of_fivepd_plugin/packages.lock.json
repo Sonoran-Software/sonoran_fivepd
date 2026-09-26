@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "dependencies": {
+    ".NETFramework,Version=v4.5.2": {
+      "CitizenFX.Core.Client": {
+        "type": "Direct",
+        "requested": "[1.0.3324, )",
+        "resolved": "1.0.3324",
+        "contentHash": "LsuPxySuBNZ/xEBOMhQZGjmOhqfe7WVSypjvamw7Ioo3T97sYffWocqrVF6w9/Ma0rV1v5VIQiZARbvjzp7Tzg=="
+      },
+      "FivePD.net": {
+        "type": "Direct",
+        "requested": "[1.3.0, )",
+        "resolved": "1.3.0",
+        "contentHash": "62tcqdUoVkuylrlPqB5YwXEzaY380cCokOeOTi8O9byeTkDgYfjDdGdIHtw0MMqcnAVxTYYMkvNcuBXd4NOSfQ==",
+        "dependencies": {
+          "CitizenFX.Core.Client": "1.0.3324"
+        }
+      },
+      "Microsoft.NETFramework.ReferenceAssemblies.net452": {
+        "type": "Direct",
+        "requested": "[1.0.3, )",
+        "resolved": "1.0.3",
+        "contentHash": "kuFOgilYbs29xENHlqQ6aJYa+t56u+OqHx85P7GYLVlo7HL3nsug9IQY2DoPgkOpZ2xb9btYV2EFK7Enll8S3A=="
+      }
+    }
+  }
+}

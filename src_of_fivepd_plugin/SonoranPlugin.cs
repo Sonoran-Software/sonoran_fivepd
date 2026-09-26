@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using CitizenFX.Core;
@@ -8,96 +8,203 @@ using FivePD.API.Utils;
 
 namespace SonoranPlugin
 {
-    public class SonoranPlugin : Plugin
+    public sealed class SonoranPlugin : Plugin
     {
-        internal SonoranPlugin()
-        {
-            Events.OnCalloutReceived += this.OnCalloutReceived;
-            Events.OnCalloutAccepted += this.OnCalloutAccepted;
-            Events.OnCalloutCompleted += this.OnCalloutCompleted;
-            Events.OnDutyStatusChange += this.OnDutyStatusChange;
-            Events.OnServiceCalled += this.OnServiceCalled;
-            Events.OnRankChanged += this.OnRankChanged;
-            Events.OnPedArrested += this.OnPedArrested;
-        }
-        private bool isDebugging = false;
-        
-        private void DebugLog(string message)
-        {
-            if (!isDebugging) return;
-            Debug.WriteLine("SonoranCAD (FivePD Plugin): " + message);
-        }
+        private const string Prefix = "SonoranCAD::fivepd:v2:";
+        private static readonly Task Done = Task.FromResult(0);
+        private readonly Dictionary<int, int> recentPeds = new Dictionary<int, int>();
+        private readonly Dictionary<int, int> recentVehicles = new Dictionary<int, int>();
+        private bool importing;
+        private int lastCallSync = -60000;
 
-        public async Task OnCalloutReceived(Callout callout)
+        public SonoranPlugin()
         {
-            DebugLog("Callout Received!");
-            string callIdent = callout.Identifier;
-            string callId = callout.CaseID;
-            string callName = callout.ShortName;
-            string callDesc = callout.CalloutDescription;
-            Vector3 callLoc = callout.Location;
-            Blip callMarker = callout.Marker;
-            int callResponse = callout.ResponseCode;
-            TriggerServerEvent("SonoranCAD::fivepd:CalloutReceived", Game.Player.Character.NetworkId, callIdent, callId, callName, callDesc, callLoc, callMarker, callResponse);
+            Events.OnCalloutAccepted += callout => SendCallout("accepted", callout);
+            Events.OnCalloutCompleted += callout => SendCallout("completed", callout);
+            Events.OnServiceCalled += service => SendService(service);
+            Events.OnPedArrested += ped => Guard(() => ImportPed(ped, true));
+            Tick += PollTrafficStop;
+            API.RegisterCommand("fivepdcadped", new Action<int, List<object>, string>((_, args, raw) =>
+                RunCommand(false)), false);
+            API.RegisterCommand("fivepdcadvehicle", new Action<int, List<object>, string>((_, args, raw) =>
+                RunCommand(true)), false);
+            Debug.WriteLine("[sonoran_fivepd] Bridge 2.0.0 loaded (unofficial, unsupported).");
         }
 
-        public async Task OnCalloutAccepted(Callout callout)
+        private static bool Ready()
         {
-            DebugLog("Callout Accepted!");
-            string callIdent = callout.Identifier;
-            DebugLog("callIdent" + callIdent);
-            string callId = callout.CaseID;
-            DebugLog("callId" + callId);
-            string callName = callout.ShortName;
-            DebugLog("callName" + callName);
-            string callDesc = callout.CalloutDescription;
-            DebugLog("callDesc!" + callDesc);
-            Vector3 callCoord = callout.Location;
-            DebugLog("callLoc" + callCoord.ToString());
-            uint var1 = 0;
-            uint var2 = 0;
-
-            API.GetStreetNameAtCoord(callCoord.X, callCoord.Y, callCoord.Z, ref var1, ref var2);
-
-            var l1 = API.GetStreetNameFromHashKey(var1);
-            var l2 = API.GetStreetNameFromHashKey(var2);
-
-            string callLocation = (l2 != ""? l1 + " / " + l2: l1);
-
-            int callResponse = callout.ResponseCode;
-            DebugLog("callResponse" + callResponse);
-            DebugLog("Sending Callout to CAD");
-            TriggerServerEvent("SonoranCAD::fivepd:CalloutAccepted", Game.Player.Character.NetworkId, callIdent, callId, callName, callDesc, callResponse, callLocation, callCoord);
-        }
-        public async Task OnCalloutCompleted(Callout callout)
-        {
-            DebugLog("Callout Complete!");
-            TriggerServerEvent("SonoranCAD::fivepd:CalloutCompleted", Game.Player.Character.NetworkId, callout);
+            return API.GetResourceState("sonoran_fivepd") == "started"
+                && Utilities.IsPlayerOnDuty != null && Utilities.IsPlayerOnDuty();
         }
 
-        public async Task OnDutyStatusChange(bool onDuty)
+        private static async Task Guard(Func<Task> action)
         {
-            DebugLog("You are now " + (onDuty ? "on" : "off") + "duty");
-            TriggerServerEvent("SonoranCAD::fivepd:DutyStatusChange", Game.Player.Character.NetworkId, onDuty);
+            try { if (Ready()) await action(); }
+            catch (Exception ex) { Debug.WriteLine("[sonoran_fivepd] " + ex.Message); }
         }
 
-        public async Task OnServiceCalled(Utilities.Services service)
+        private static Task SendCallout(string action, Callout callout)
         {
-            DebugLog("Called Service: " + service);
-            TriggerServerEvent("SonoranCAD::fivepd:ServiceCalled", Game.Player.Character.NetworkId, service);
+            return Guard(() =>
+            {
+                if (callout == null) return Done;
+                uint street = 0, crossing = 0;
+                var pos = callout.Location;
+                API.GetStreetNameAtCoord(pos.X, pos.Y, pos.Z, ref street, ref crossing);
+                var address = API.GetStreetNameFromHashKey(street);
+                if (crossing != 0) address += " / " + API.GetStreetNameFromHashKey(crossing);
+                TriggerServerEvent(Prefix + "callout", action, new Dictionary<string, object>
+                {
+                    ["identifier"] = callout.Identifier ?? "",
+                    ["caseId"] = callout.CaseID ?? "",
+                    ["title"] = callout.ShortName ?? "FivePD callout",
+                    ["description"] = callout.CalloutDescription ?? "",
+                    ["responseCode"] = callout.ResponseCode,
+                    ["address"] = address ?? "",
+                    ["x"] = pos.X, ["y"] = pos.Y, ["z"] = pos.Z
+                });
+                return Done;
+            });
         }
 
-        public async Task OnRankChanged(string rank)
+        private static Task SendService(Utilities.Services service)
         {
-            DebugLog("Rank Changed!");
-            TriggerServerEvent("SonoranCAD::fivepd:RankChanged", Game.Player.Character.NetworkId, rank);
+            return Guard(() =>
+            {
+                TriggerServerEvent(Prefix + "service", service.ToString());
+                return Done;
+            });
         }
 
-        public async Task OnPedArrested(Ped ped)
+        private static bool Eligible(Entity entity, int entityType)
         {
-            DebugLog("Ped Arrested!");
-            PedData pedData = await Utilities.GetPedData(ped.NetworkId);
-            TriggerServerEvent("SonoranCAD::fivepd:PedArrested", Game.Player.Character.NetworkId, pedData);
+            return entity != null && entity.Exists() && API.GetEntityType(entity.Handle) == entityType
+                && API.NetworkGetEntityIsNetworked(entity.Handle)
+                && (entityType != 1 || !API.IsPedAPlayer(entity.Handle))
+                && entity.Position.DistanceTo(Game.Player.Character.Position) <= 80f;
+        }
+
+        private static bool Recent(Dictionary<int, int> cache, int id, bool force)
+        {
+            int now = API.GetGameTimer();
+            if (!force && cache.TryGetValue(id, out int previous) && now >= previous && now - previous < 60000)
+                return true;
+            if (cache.Count > 256) cache.Clear();
+            return false;
+        }
+
+        private async Task ImportPed(Ped ped, bool force = false)
+        {
+            if (!Eligible(ped, 1) || Utilities.GetPedData == null) return;
+            int id = ped.NetworkId;
+            if (Recent(recentPeds, id, force)) return;
+            var request = Utilities.GetPedData(id);
+            if (request == null || await Task.WhenAny(request, Delay(5000)) != request) return;
+            PedData data = await request;
+            if (data == null || !Eligible(ped, 1) || ped.NetworkId != id || !Ready()) return;
+            if (string.IsNullOrWhiteSpace(data.FirstName) || string.IsNullOrWhiteSpace(data.LastName)) return;
+            var payload = new Dictionary<string, object>
+            {
+                ["FirstName"] = data.FirstName, ["LastName"] = data.LastName,
+                ["DateOfBirth"] = data.DateOfBirth ?? "", ["Gender"] = data.Gender.ToString(),
+                ["Age"] = data.Age, ["Address"] = data.Address ?? "", ["Warrant"] = data.Warrant ?? "",
+                ["NetworkID"] = id
+            };
+            AddLicense(payload, "Driver", data.DriverLicense);
+            AddLicense(payload, "Hunting", data.HuntingLicense);
+            AddLicense(payload, "Fishing", data.FishingLicense);
+            AddLicense(payload, "Weapon", data.WeaponLicense);
+            TriggerServerEvent(Prefix + "ped", payload);
+            recentPeds[id] = API.GetGameTimer();
+        }
+
+        private static void AddLicense(Dictionary<string, object> payload, string name, PedData.License license)
+        {
+            if (license == null) return;
+            payload[name + "LicenseStatus"] = license.LicenseStatus.ToString();
+            payload[name + "LicenseExpiration"] = license.ExpirationDate ?? "";
+        }
+
+        private async Task ImportVehicle(Vehicle vehicle, bool force = false)
+        {
+            if (!Eligible(vehicle, 2) || Utilities.GetVehicleData == null) return;
+            int id = vehicle.NetworkId;
+            if (Recent(recentVehicles, id, force)) return;
+            var request = Utilities.GetVehicleData(id);
+            if (request == null || await Task.WhenAny(request, Delay(5000)) != request) return;
+            VehicleData data = await request;
+            if (data == null || !Eligible(vehicle, 2) || vehicle.NetworkId != id || !Ready()) return;
+            if (string.IsNullOrWhiteSpace(data.LicensePlate)) return;
+            TriggerServerEvent(Prefix + "vehicle", new Dictionary<string, object>
+            {
+                ["LicensePlate"] = data.LicensePlate.Trim(), ["Flag"] = data.Flag ?? "",
+                ["OwnerFirstName"] = data.OwnerFirstName ?? "", ["OwnerLastName"] = data.OwnerLastName ?? "",
+                ["Insurance"] = data.Insurance, ["Registration"] = data.Registration,
+                ["Color"] = data.Color ?? "", ["Name"] = data.Name ?? "", ["NetworkID"] = id
+            });
+            recentVehicles[id] = API.GetGameTimer();
+        }
+
+        private async Task PollTrafficStop()
+        {
+            await Delay(2000);
+            if (importing) return;
+            importing = true;
+            try
+            {
+                await Guard(async () =>
+                {
+                    int now = API.GetGameTimer();
+                    if (now < lastCallSync || now - lastCallSync >= 60000)
+                    {
+                        lastCallSync = now;
+                        if (Utilities.GetCurrentCallout != null)
+                            await SendCallout("accepted", Utilities.GetCurrentCallout());
+                    }
+                    if (Utilities.IsPlayerPerformingTrafficStop == null || !Utilities.IsPlayerPerformingTrafficStop()) return;
+                    if (Utilities.GetVehicleFromTrafficStop != null) await ImportVehicle(Utilities.GetVehicleFromTrafficStop());
+                    if (Utilities.GetDriverFromTrafficStop != null) await ImportPed(Utilities.GetDriverFromTrafficStop());
+                    if (Utilities.GetPassengersFromTrafficStop != null)
+                    {
+                        var passengers = Utilities.GetPassengersFromTrafficStop();
+                        if (passengers != null)
+                            foreach (var ped in passengers) await ImportPed(ped);
+                    }
+                });
+            }
+            finally { importing = false; }
+        }
+
+        private async void RunCommand(bool vehicle)
+        {
+            await Guard(async () =>
+            {
+                var position = Game.Player.Character.Position;
+                if (vehicle)
+                {
+                    Vehicle nearest = null;
+                    float distance = 15f;
+                    foreach (var candidate in World.GetAllVehicles())
+                    {
+                        float next = candidate.Position.DistanceTo(position);
+                        if (Eligible(candidate, 2) && next < distance) { nearest = candidate; distance = next; }
+                    }
+                    if (nearest != null) await ImportVehicle(nearest, true);
+                    else Debug.WriteLine("[sonoran_fivepd] No networked vehicle within 15 metres.");
+                }
+                else
+                {
+                    Ped nearest = null;
+                    float distance = 5f;
+                    foreach (var candidate in World.GetAllPeds())
+                    {
+                        float next = candidate.Position.DistanceTo(position);
+                        if (Eligible(candidate, 1) && next < distance) { nearest = candidate; distance = next; }
+                    }
+                    if (nearest != null) await ImportPed(nearest, true);
+                    else Debug.WriteLine("[sonoran_fivepd] No networked NPC within 5 metres.");
+                }
+            });
         }
     }
 }
