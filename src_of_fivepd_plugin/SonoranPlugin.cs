@@ -16,19 +16,30 @@ namespace SonoranPlugin
         private readonly Dictionary<int, int> recentVehicles = new Dictionary<int, int>();
         private bool importing;
         private int lastCallSync = -60000;
+        private Callout acceptedCallout;
+        private int calloutCursor;
 
         public SonoranPlugin()
         {
-            Events.OnCalloutAccepted += callout => SendCallout("accepted", callout);
-            Events.OnCalloutCompleted += callout => SendCallout("completed", callout);
+            Events.OnCalloutAccepted += callout =>
+            {
+                acceptedCallout = callout;
+                calloutCursor = 0;
+                return SendCallout("accepted", callout);
+            };
+            Events.OnCalloutCompleted += callout =>
+            {
+                if (acceptedCallout?.Identifier == callout?.Identifier) acceptedCallout = null;
+                return SendCallout("completed", callout);
+            };
             Events.OnServiceCalled += service => SendService(service);
             Events.OnPedArrested += ped => Guard(() => ImportPed(ped, true));
-            Tick += PollTrafficStop;
+            Tick += PollEncounters;
             API.RegisterCommand("fivepdcadped", new Action<int, List<object>, string>((_, args, raw) =>
                 RunCommand(false)), false);
             API.RegisterCommand("fivepdcadvehicle", new Action<int, List<object>, string>((_, args, raw) =>
                 RunCommand(true)), false);
-            Debug.WriteLine("[sonoran_fivepd] Bridge 2.0.0 loaded (unofficial, unsupported).");
+            Debug.WriteLine("[sonoran_fivepd] Bridge 2.1.0 loaded (unofficial, unsupported).");
         }
 
         private static bool Ready()
@@ -76,12 +87,12 @@ namespace SonoranPlugin
             });
         }
 
-        private static bool Eligible(Entity entity, int entityType)
+        private static bool Eligible(Entity entity, int entityType, bool calloutEntity = false)
         {
             return entity != null && entity.Exists() && API.GetEntityType(entity.Handle) == entityType
                 && API.NetworkGetEntityIsNetworked(entity.Handle)
                 && (entityType != 1 || !API.IsPedAPlayer(entity.Handle))
-                && entity.Position.DistanceTo(Game.Player.Character.Position) <= 80f;
+                && (calloutEntity || entity.Position.DistanceTo(Game.Player.Character.Position) <= 80f);
         }
 
         private static bool Recent(Dictionary<int, int> cache, int id, bool force)
@@ -93,15 +104,15 @@ namespace SonoranPlugin
             return false;
         }
 
-        private async Task ImportPed(Ped ped, bool force = false)
+        private async Task ImportPed(Ped ped, bool force = false, bool calloutEntity = false)
         {
-            if (!Eligible(ped, 1) || Utilities.GetPedData == null) return;
+            if (!Eligible(ped, 1, calloutEntity) || Utilities.GetPedData == null) return;
             int id = ped.NetworkId;
             if (Recent(recentPeds, id, force)) return;
             var request = Utilities.GetPedData(id);
             if (request == null || await Task.WhenAny(request, Delay(5000)) != request) return;
             PedData data = await request;
-            if (data == null || !Eligible(ped, 1) || ped.NetworkId != id || !Ready()) return;
+            if (data == null || !Eligible(ped, 1, calloutEntity) || ped.NetworkId != id || !Ready()) return;
             if (string.IsNullOrWhiteSpace(data.FirstName) || string.IsNullOrWhiteSpace(data.LastName)) return;
             var payload = new Dictionary<string, object>
             {
@@ -125,15 +136,15 @@ namespace SonoranPlugin
             payload[name + "LicenseExpiration"] = license.ExpirationDate ?? "";
         }
 
-        private async Task ImportVehicle(Vehicle vehicle, bool force = false)
+        private async Task ImportVehicle(Vehicle vehicle, bool force = false, bool calloutEntity = false)
         {
-            if (!Eligible(vehicle, 2) || Utilities.GetVehicleData == null) return;
+            if (!Eligible(vehicle, 2, calloutEntity) || Utilities.GetVehicleData == null) return;
             int id = vehicle.NetworkId;
             if (Recent(recentVehicles, id, force)) return;
             var request = Utilities.GetVehicleData(id);
             if (request == null || await Task.WhenAny(request, Delay(5000)) != request) return;
             VehicleData data = await request;
-            if (data == null || !Eligible(vehicle, 2) || vehicle.NetworkId != id || !Ready()) return;
+            if (data == null || !Eligible(vehicle, 2, calloutEntity) || vehicle.NetworkId != id || !Ready()) return;
             if (string.IsNullOrWhiteSpace(data.LicensePlate)) return;
             TriggerServerEvent(Prefix + "vehicle", new Dictionary<string, object>
             {
@@ -145,7 +156,7 @@ namespace SonoranPlugin
             recentVehicles[id] = API.GetGameTimer();
         }
 
-        private async Task PollTrafficStop()
+        private async Task PollEncounters()
         {
             await Delay(2000);
             if (importing) return;
@@ -154,13 +165,15 @@ namespace SonoranPlugin
             {
                 await Guard(async () =>
                 {
+                    var currentCallout = Utilities.GetCurrentCallout != null ? Utilities.GetCurrentCallout() : acceptedCallout;
+                    acceptedCallout = currentCallout;
                     int now = API.GetGameTimer();
                     if (now < lastCallSync || now - lastCallSync >= 60000)
                     {
                         lastCallSync = now;
-                        if (Utilities.GetCurrentCallout != null)
-                            await SendCallout("accepted", Utilities.GetCurrentCallout());
+                        await SendCallout("accepted", currentCallout);
                     }
+                    await ImportCalloutEntities(currentCallout);
                     if (Utilities.IsPlayerPerformingTrafficStop == null || !Utilities.IsPlayerPerformingTrafficStop()) return;
                     if (Utilities.GetVehicleFromTrafficStop != null) await ImportVehicle(Utilities.GetVehicleFromTrafficStop());
                     if (Utilities.GetDriverFromTrafficStop != null) await ImportPed(Utilities.GetDriverFromTrafficStop());
@@ -173,6 +186,31 @@ namespace SonoranPlugin
                 });
             }
             finally { importing = false; }
+        }
+
+        private async Task ImportCalloutEntities(Callout callout)
+        {
+            if (callout == null || API.GetConvarInt("sonoran_fivepd_autoCalloutRecords", 1) == 0) return;
+            var entities = CalloutEntityCollector.Collect<Entity>(callout, typeof(Callout));
+            int attempted = 0;
+            int start = entities.Count == 0 ? 0 : calloutCursor % entities.Count;
+            for (int i = 0; i < entities.Count && attempted < 4; i++)
+            {
+                if (!ReferenceEquals(acceptedCallout, callout) || !Ready()) return;
+                int index = (start + i) % entities.Count;
+                var entity = entities[index];
+                calloutCursor = index + 1;
+                if (entity is Ped ped && Eligible(ped, 1, true) && !Recent(recentPeds, ped.NetworkId, false))
+                {
+                    attempted++;
+                    await Guard(() => ImportPed(ped, false, true));
+                }
+                else if (entity is Vehicle vehicle && Eligible(vehicle, 2, true) && !Recent(recentVehicles, vehicle.NetworkId, false))
+                {
+                    attempted++;
+                    await Guard(() => ImportVehicle(vehicle, false, true));
+                }
+            }
         }
 
         private async void RunCommand(bool vehicle)

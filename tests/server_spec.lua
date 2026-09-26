@@ -12,6 +12,7 @@ function GetPlayerName(src) return players[src] end
 local aceAllowed = true
 function IsPlayerAceAllowed() return aceAllowed end
 function GetResourceState() return 'started' end
+function SetConvarReplicated() end
 function GetResourceKvpString(id) return kvp[id] end
 function SetResourceKvp(id, value) kvp[id] = value end
 function RegisterNetEvent(name, fn) handlers[name] = fn end
@@ -68,6 +69,8 @@ exports = { sonorancad = {
 local function boot()
     handlers = {}
     dofile('sonoran_fivepd/config.lua')
+    Config.records.license.enabled = false
+    Config.records.warrant.enabled = false
     dofile('sonoran_fivepd/server.lua')
 end
 local function event(src, name, ...)
@@ -252,6 +255,59 @@ for _, request in ipairs(requests) do
     end
     previous[request.method] = request.at
 end
+
+-- Exercise the shipped defaults, including the original and CAD-sanitized license UIDs.
+now = now + 3601
+boot()
+Config.records.license.enabled = true
+Config.records.warrant.enabled = true
+ped.FirstName = 'Default'
+ped.DriverLicenseStatus, ped.DriverLicenseExpiration = 'Revoked', '09/26/2027'
+ped.HuntingLicenseStatus, ped.WeaponLicenseStatus, ped.FishingLicenseStatus = 'Valid', 'Expired', 'Valid'
+before = #requests
+event(11, 'ped', ped)
+drain()
+same(#requests - before, 5, 'Defaults create civilian, three supported licenses and warrant; not fishing')
+local licenses = 0
+for i = before + 1, #requests do
+    local record = requests[i].args[1]
+    local values = record.replaceValues
+    same(values.first, 'Default', 'Default identity UID')
+    same(values.sex, 'F', 'Default sex dropdown value')
+    if record.recordTypeId == 4 then
+        licenses = licenses + 1
+        same(values['252c425-0da9-421c-bd'], '1', 'Default license DMV approval')
+        same(values['252c4250da9421cbd'], '1', 'Saved license DMV UID alias')
+        same(values['878766af4964853a7'], values['878766a-f496-4853-a7'], 'License status UID alias')
+        same(values['7eddab31daf4a0182'], values['7eddab3-1daf-4a01-82'], 'License type UID alias')
+        if values['7eddab3-1daf-4a01-82'] == 'DRIVER' then
+            same(values['878766a-f496-4853-a7'], 'SUSPENDED', 'Revoked mapped to default suspended option')
+            same(values['_54iz1scv7'], '09/26/2027', 'License expiration UID')
+        end
+    elseif record.recordTypeId == 2 then
+        same(values['_avb6wvgyi'], 'Failure to appear', 'Default warrant narrative UID')
+        same(values['_f9krngjbm'], '0', 'Default warrant open status')
+    else
+        same(record.recordTypeId, 7, 'Default civilian record type')
+    end
+end
+same(licenses, 3, 'Driver, hunting and weapon licenses')
+before = #requests
+event(12, 'ped', ped)
+drain()
+same(#requests, before, 'Entire automatic bundle deduplicated between officers')
+vehicle.LicensePlate, vehicle.Flag = 'STOLEN1', 'Stolen'
+event(11, 'vehicle', vehicle)
+drain()
+payload = last('createRecordV2').args[1]
+same(payload.replaceValues.status, 'STOLEN', 'Default vehicle stolen option')
+same(payload.replaceValues['_wsakvwigt'], '1', 'Default vehicle DMV approval UID')
+same(payload.replaceValues.insurance, nil, 'No nonexistent insurance UID sent by default')
+
+Config.records.license.types.Fishing = 'FISHING'
+event(11, 'ped', ped)
+drain()
+same(last('createRecordV2').args[1].replaceValues['7eddab3-1daf-4a01-82'], 'FISHING', 'Custom fishing option can be enabled')
 if cad_root then
     assert(#httpRequests > 0, 'SDK requests were exercised')
     for _, request in ipairs(httpRequests) do

@@ -1,10 +1,11 @@
 Unofficial, unsupported, and not maintained. Provided as-is for legacy FivePD communities.
 
-- Standalone resource for SonoranCADFiveM 4.0.119+, using its bundled Sonoran.lua v2 API client.
-- Shared dispatch calls, officer attachment, completion notes, and service-request notes.
-- Traffic-stop and arrest NPC imports, vehicle imports, and nearby import commands.
-- Optional license and warrant mappings.
-- CAD-managed deletion after 60 minutes by default, with persistent duplicate suppression and paced API writes.
-- Prebuilt FivePD plugin DLL and installation instructions included in `sonoran_fivepd.zip`.
+- Automatically imports NPCs and vehicles retained by accepted callouts, including later spawns. Nearby commands remain optional fallbacks for custom callouts that cannot be inspected.
+- Civilian, vehicle, license, and warrant imports enabled with verified default CAD mapping IDs and matching dropdown values.
+- Supports both original and saved default license UIDs. Fishing licenses remain opt-in because the default CAD template has no fishing option.
+- README includes illustrated field-ID instructions and clear automatic-import limits.
+- All CAD writes still use the bundled Sonoran.lua v2 client, paced with persistent duplicate suppression and 60-minute CAD-managed deletion by default.
 
-Built against the published FivePD API 1.3.0. Compilation and automated bridge/SDK tests pass; live FivePD gameplay has not been verified. Remove the old Sonoran CAD FivePD submodule and replace its DLL when upgrading. See the README for installation and configuration.
+**Upgrade:** back up your configuration, replace both the resource and `SonoranPlugin.net.dll`, and merge custom settings into the new `config.lua`. Restart the server and reconnect. No Sonoran CAD resource changes are needed.
+
+Build, collector tests, and bridge tests through the real bundled CAD v2 SDK pass. Live FivePD gameplay has not been verified. See the README for installation and limitations.

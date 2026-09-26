@@ -30,6 +30,7 @@ jobs:
         run: |
           dotnet restore src_of_fivepd_plugin/SonoranPlugin.csproj --locked-mode
           dotnet build src_of_fivepd_plugin/SonoranPlugin.csproj -c Release --no-restore
+          dotnet run --project tests/collector/CollectorTests.csproj -c Release
       - name: Test bridge and bundled CAD v2 SDK
         run: |
           python -m pip install lupa==2.8
@@ -37,7 +38,7 @@ jobs:
       - name: Package
         run: |
           cp src_of_fivepd_plugin/bin/Release/net452/SonoranPlugin.net.dll put_in_fivepd_plugins/
-          zip -r sonoran_fivepd.zip sonoran_fivepd put_in_fivepd_plugins README.md DEVELOPMENT.md RELEASE_NOTES.md
+          zip -r sonoran_fivepd.zip sonoran_fivepd put_in_fivepd_plugins docs README.md DEVELOPMENT.md RELEASE_NOTES.md
       - uses: actions/upload-artifact@v4
         with:
           name: sonoran_fivepd

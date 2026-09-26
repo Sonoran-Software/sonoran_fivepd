@@ -4,6 +4,7 @@ local state, stateKey = { calls = {}, records = {} }, nil
 local nextRequest = {}
 local ttl = tonumber(Config.deleteAfterMinutes)
 assert(ttl and ttl >= 1 and ttl <= 1440 and ttl % 1 == 0, 'deleteAfterMinutes must be 1-1440')
+SetConvarReplicated('sonoran_fivepd_autoCalloutRecords', Config.automaticCalloutRecords == false and '0' or '1')
 
 local function log(message)
     print('[sonoran_fivepd] ' .. message)
@@ -223,7 +224,11 @@ local function createRecord(job, kind, identity, data)
     for field, mapping in pairs(config.fields) do
         local value
         if type(mapping) == 'function' then value = mapping(data) else value = data[mapping] end
-        if value ~= nil then values[field] = tostring(value) end
+        if value ~= nil then
+            values[field] = tostring(value)
+            local alias = config.fieldAliases and config.fieldAliases[field]
+            if alias then values[alias] = tostring(value) end
+        end
     end
     local response = request(job, 'createRecordV2', {
         -- v2 explicitly accepts the unowned NPC UUID through its user selector.
@@ -245,8 +250,9 @@ RegisterNetEvent(prefix .. 'ped', function(data)
         createRecord(job, 'civilian', identity, data)
         for _, license in ipairs({ 'Driver', 'Hunting', 'Fishing', 'Weapon' }) do
             local status = data[license .. 'LicenseStatus']
-            if status == 'Valid' or status == 'Expired' or status == 'Revoked' or status == 'Suspended' then
-                data.LicenseType, data.LicenseStatus = license:upper(), status
+            local cadType = (Config.records.license.types or { Driver = 'DRIVER', Hunting = 'HUNTING', Weapon = 'WEAPON' })[license]
+            if cadType and (status == 'Valid' or status == 'Expired' or status == 'Revoked' or status == 'Suspended') then
+                data.LicenseType, data.LicenseStatus = cadType, status
                 data.LicenseExpiration = data[license .. 'LicenseExpiration']
                 createRecord(job, 'license', key(identity, license), data)
             end
@@ -274,7 +280,7 @@ AddEventHandler('playerDropped', function()
 end)
 
 CreateThread(function()
-    log('2.0.0 started. Unofficial, unsupported and not maintained. CAD v2 only.')
+    log('2.1.0 started. Unofficial, unsupported and not maintained. CAD v2 only.')
     while true do
         local job = table.remove(queue, 1)
         if job then
